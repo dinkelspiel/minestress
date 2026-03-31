@@ -1,4 +1,6 @@
-const mineflayer = require("mineflayer");
+const { Worker } = require("worker_threads");
+const os = require("os");
+const path = require("path");
 
 const CONFIG = {
   host: process.env.MC_HOST || "localhost",
@@ -7,62 +9,55 @@ const CONFIG = {
   botCount: parseInt(process.env.BOT_COUNT) || 10,
   spawnDelay: parseInt(process.env.SPAWN_DELAY) || 200,
   prefix: process.env.BOT_PREFIX || "StressBot_",
+  threads: parseInt(process.env.THREADS) || os.cpus().length,
 };
 
-const bots = [];
+const workers = [];
 
-function createBot(index) {
-  const username = `${CONFIG.prefix}${index}`;
+function start() {
+  const threadCount = Math.min(CONFIG.threads, CONFIG.botCount);
+  const perThread = Math.floor(CONFIG.botCount / threadCount);
+  const remainder = CONFIG.botCount % threadCount;
 
-  const bot = mineflayer.createBot({
-    host: CONFIG.host,
-    port: CONFIG.port,
-    username,
-    version: CONFIG.version,
-    hideErrors: true,
-  });
-
-  bot._client.on("error", () => {});
-
-  bot.once("spawn", () => {
-    console.log(`[+] ${username} spawned`);
-  });
-
-  bot.on("kicked", (reason) => {
-    console.log(`[!] ${username} kicked: ${reason}`);
-  });
-
-  bot.on("error", () => {});
-
-  bot.on("end", () => {
-    console.log(`[-] ${username} disconnected`);
-  });
-
-  bots.push(bot);
-  return bot;
-}
-
-async function start() {
   console.log(
-    `Starting ${CONFIG.botCount} bots on ${CONFIG.host}:${CONFIG.port}`,
+    `Starting ${CONFIG.botCount} bots across ${threadCount} threads on ${CONFIG.host}:${CONFIG.port}`,
   );
 
-  for (let i = 0; i < CONFIG.botCount; i++) {
-    createBot(i);
-    if (i < CONFIG.botCount - 1) {
-      await new Promise((r) => setTimeout(r, CONFIG.spawnDelay));
-    }
+  let offset = 0;
+  for (let t = 0; t < threadCount; t++) {
+    const count = perThread + (t < remainder ? 1 : 0);
+
+    const worker = new Worker(path.join(__dirname, "worker.js"), {
+      workerData: {
+        config: CONFIG,
+        startIndex: offset,
+        count,
+      },
+    });
+
+    worker.on("message", (msg) => {
+      if (msg.type === "spawned") console.log(`[+] ${msg.username} spawned`);
+      else if (msg.type === "kicked")
+        console.log(`[!] ${msg.username} kicked: ${msg.reason}`);
+      else if (msg.type === "disconnected")
+        console.log(`[-] ${msg.username} disconnected`);
+    });
+
+    worker.on("error", (err) => {
+      console.log(`[!] thread ${t} error: ${err.message}`);
+    });
+
+    workers.push(worker);
+    offset += count;
   }
 }
 
 process.on("SIGINT", () => {
   console.log("\nDisconnecting all bots...");
-  for (const bot of bots) {
-    try {
-      bot.quit();
-    } catch (_) {}
+  for (const w of workers) {
+    w.postMessage("quit");
   }
-  process.exit();
+  setTimeout(() => process.exit(), 1000);
 });
 
 start();
