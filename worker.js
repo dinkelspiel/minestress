@@ -5,6 +5,8 @@ const { pathfinder, Movements, goals } = require("mineflayer-pathfinder");
 
 const { config, startIndex, count } = workerData;
 const bots = [];
+const RECONNECT_DELAY = 5000;
+let quitting = false;
 
 function randInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -36,14 +38,23 @@ function createBot(index) {
     scheduleDig(bot, data);
   });
 
+  let lastReason = null;
+
   bot.on("kicked", (reason) => {
-    parentPort.postMessage({ type: "kicked", username, reason });
+    try { lastReason = JSON.parse(reason)?.text || JSON.parse(reason)?.translate || reason; } catch (_) { lastReason = reason; }
+    parentPort.postMessage({ type: "kicked", username, reason: lastReason });
   });
 
-  bot.on("error", () => {});
+  bot.on("error", (err) => {
+    lastReason = err.message;
+  });
 
-  bot.on("end", () => {
-    parentPort.postMessage({ type: "disconnected", username });
+  bot.on("end", (reason) => {
+    const endReason = lastReason || reason || "unknown";
+    parentPort.postMessage({ type: "disconnected", username, reason: endReason });
+    const i = bots.indexOf(bot);
+    if (i !== -1) bots.splice(i, 1);
+    if (!quitting) setTimeout(() => createBot(index), RECONNECT_DELAY);
   });
 
   bots.push(bot);
@@ -95,6 +106,7 @@ async function run() {
 
 parentPort.on("message", (msg) => {
   if (msg === "quit") {
+    quitting = true;
     for (const bot of bots) {
       try { bot.quit(); } catch (_) {}
     }
