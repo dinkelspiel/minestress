@@ -41,6 +41,8 @@ function start() {
         console.log(`[!] ${msg.username} kicked: ${msg.reason}`);
       else if (msg.type === "disconnected")
         console.log(`[-] ${msg.username} disconnected: ${msg.reason}`);
+      else if (msg.type === "warn")
+        console.log(`[?] ${msg.username}: ${msg.message}`);
     });
 
     worker.on("error", (err) => {

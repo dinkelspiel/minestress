@@ -29,12 +29,15 @@ function createBot(index) {
   bot.once("spawn", () => {
     parentPort.postMessage({ type: "spawned", username });
 
-    const data = mcData(bot.version);
-    const moves = new Movements(bot, data);
-    moves.allowSprinting = true;
-    bot.pathfinder.setMovements(moves);
-
-    scheduleBehavior(bot, data);
+    try {
+      const data = mcData(bot.version);
+      const moves = new Movements(bot, data);
+      moves.allowSprinting = true;
+      bot.pathfinder.setMovements(moves);
+      scheduleBehavior(bot, data);
+    } catch (err) {
+      parentPort.postMessage({ type: "warn", username, message: `behavior init failed: ${err.message}` });
+    }
   });
 
   let lastReason = null;
@@ -79,23 +82,23 @@ function scheduleBehavior(bot, data) {
 
     const roll = Math.random();
 
-    if (roll < 0.15) {
+    if (roll < 0.35) {
       const pos = bot.entity.position;
       const x = pos.x + randInt(-20, 20);
       const z = pos.z + randInt(-20, 20);
       try { bot.pathfinder.setGoal(new goals.GoalNear(x, pos.y, z, 2), false); } catch (_) {}
-    } else if (roll < 0.20) {
+    } else if (roll < 0.50) {
       const target = bot.findBlock({ matching: (b) => breakable.has(b.type), maxDistance: 4 });
       if (target) bot.dig(target).catch(() => {});
-    } else if (roll < 0.22) {
+    } else if (roll < 0.55) {
       const yaw = Math.random() * Math.PI * 2;
       bot.look(yaw, 0, false);
     }
 
-    setTimeout(tick, randInt(10000, 60000));
+    setTimeout(tick, randInt(3000, 20000));
   };
 
-  setTimeout(tick, randInt(5000, 120000));
+  setTimeout(tick, randInt(2000, 30000));
 }
 
 async function run() {
