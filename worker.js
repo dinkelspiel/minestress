@@ -34,11 +34,18 @@ function createBot(index) {
     moves.allowSprinting = true;
     bot.pathfinder.setMovements(moves);
 
-    scheduleWander(bot);
-    scheduleDig(bot, data);
+    scheduleBehavior(bot, data);
   });
 
   let lastReason = null;
+
+  bot._client.on("disconnect", (packet) => {
+    try { lastReason = JSON.parse(packet.reason)?.text || JSON.parse(packet.reason)?.translate || packet.reason; } catch (_) { lastReason = packet.reason; }
+  });
+
+  bot._client.on("kick_disconnect", (packet) => {
+    try { lastReason = JSON.parse(packet.reason)?.text || JSON.parse(packet.reason)?.translate || packet.reason; } catch (_) { lastReason = packet.reason; }
+  });
 
   bot.on("kicked", (reason) => {
     try { lastReason = JSON.parse(reason)?.text || JSON.parse(reason)?.translate || reason; } catch (_) { lastReason = reason; }
@@ -60,39 +67,35 @@ function createBot(index) {
   bots.push(bot);
 }
 
-function scheduleWander(bot) {
-  const wander = () => {
-    if (!bot.entity) return;
-    const pos = bot.entity.position;
-    const x = pos.x + randInt(-30, 30);
-    const z = pos.z + randInt(-30, 30);
-    try {
-      bot.pathfinder.setGoal(new goals.GoalNear(x, pos.y, z, 2), false);
-    } catch (_) {}
-    setTimeout(wander, randInt(5000, 15000));
-  };
-  setTimeout(wander, randInt(2000, 6000));
-}
-
-function scheduleDig(bot, data) {
+function scheduleBehavior(bot, data) {
   const breakable = new Set(
     Object.values(data.blocksByName)
       .filter((b) => b.diggable && b.hardness != null && b.hardness > 0 && b.hardness <= 2.5)
       .map((b) => b.id),
   );
 
-  const dig = async () => {
+  const tick = () => {
     if (!bot.entity) return;
-    try {
-      const target = bot.findBlock({
-        matching: (block) => breakable.has(block.type),
-        maxDistance: 4,
-      });
-      if (target) await bot.dig(target);
-    } catch (_) {}
-    setTimeout(dig, randInt(4000, 12000));
+
+    const roll = Math.random();
+
+    if (roll < 0.15) {
+      const pos = bot.entity.position;
+      const x = pos.x + randInt(-20, 20);
+      const z = pos.z + randInt(-20, 20);
+      try { bot.pathfinder.setGoal(new goals.GoalNear(x, pos.y, z, 2), false); } catch (_) {}
+    } else if (roll < 0.20) {
+      const target = bot.findBlock({ matching: (b) => breakable.has(b.type), maxDistance: 4 });
+      if (target) bot.dig(target).catch(() => {});
+    } else if (roll < 0.22) {
+      const yaw = Math.random() * Math.PI * 2;
+      bot.look(yaw, 0, false);
+    }
+
+    setTimeout(tick, randInt(10000, 60000));
   };
-  setTimeout(dig, randInt(5000, 15000));
+
+  setTimeout(tick, randInt(5000, 120000));
 }
 
 async function run() {
