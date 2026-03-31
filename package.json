@@ -1,0 +1,19 @@
+{
+  "name": "minestress",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.32.1",
+  "dependencies": {
+    "minecraft-data": "^3.109.0",
+    "mineflayer": "^4.37.0",
+    "mineflayer-pathfinder": "^2.4.5"
+  }
+}
